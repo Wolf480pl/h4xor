@@ -732,6 +732,7 @@ a img {
 .main-navigation li {
   display: inline-block;
   margin: 0px 10px;
+  position: relative;
 }
 
 .main-navigation a {
@@ -760,15 +761,17 @@ a img {
   background-color: rgba(0, 0, 0, 0.7);
   border: 1px solid rgb(0, 64, 0);
   border-top: 0px;
+  min-width: 150px;
 }
 
 .sub-menu li {
   margin: 0px;
-  padding: 3px;
+  padding: 3px 10px;
+  display: block;
 }
 
 .sub-menu li:hover {
-  background-color: rgba(0, 32, 0, 0.5);
+  background-color: rgba(0, 64, 0, 0.5);
 }
 
 /* - end menu - */
