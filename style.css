@@ -1,17 +1,22 @@
 /*  
-Theme Name: h4x0r
-Theme URI: http://www.linickx.com/index.php?content=php#wordpress_hacker.zip
+Theme Name: h4x0r-w
+Theme URI: https://github.com/Wolf480pl/h4x0r-w
 Description: This is a h4x0r (hacker) / matrix theme, the usual black on green with some <i>silly</i> extras ;-) <br/> <small>Comes with built in wpg2 support</small>
 Version: 0.1
-Author: Nick [LINICKX] Bettison
-Author URI: http://www.linickx.com/
+Author: Wolf480pl
+Author URI: http://wolf480pl.github.com
 
 	Derived from...
-	Kubrick v1.5
-	 http://binarybonsai.com/kubrick/
+	h4x0r 0.1
+	http://www.linickx.com/119/h4x0r-hacker-the-matrix-theme-for-wordpress
+	by Nick [LINICKX] Bettison (http://www.linickx.com/)
+
+		Derived from...
+		Kubrick v1.5
+		 http://binarybonsai.com/kubrick/
 
 	*** REGARDING IMAGES ***
-	All CSS that involves the use of images, can be found in the 'index.php' file.
+	All CSS that involves the use of images, can be found in the 'header.php' file.
 	This is to ease installation inside subdirectories of a server.
 
 	Have fun, and don't be afraid to contact me if you have questions.
@@ -52,11 +57,11 @@ body {
 
 .widecolumn {
 	line-height: 1.6em;
-	}
+}
 	
 .narrowcolumn .postmetadata {
 	text-align: center;
-	}
+}
 
 .alt {
 	background-color: #555555;
@@ -381,7 +386,7 @@ img.alignleft {
 
 .alignright {
 	float: right;
-	}
+}
 	
 .alignleft {
 	float: left
