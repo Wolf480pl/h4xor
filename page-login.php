@@ -241,15 +241,18 @@ function retrieve_password() {
 		return new WP_Error('no_password_reset', __('Password reset is not allowed for this user'));
 	else if ( is_wp_error($allow) )
 		return $allow;
-
-	$key = $wpdb->get_var($wpdb->prepare("SELECT user_activation_key FROM $wpdb->users WHERE user_login = %s", $user_login));
-	if ( empty($key) ) {
-		// Generate something random for a key...
-		$key = wp_generate_password(20, false);
-		do_action('retrieve_password_key', $user_login, $key);
-		// Now insert the new md5 key into the db
-		$wpdb->update($wpdb->users, array('user_activation_key' => $key), array('user_login' => $user_login));
+	
+	// Generate something random for a key...
+	$key = wp_generate_password(20, false);
+	do_action('retrieve_password_key', $user_login, $key);
+	// Now insert the new md5 key into the db
+	if ( empty( $wp_hasher ) ) {
+		require_once ABSPATH . 'wp-includes/class-phpass.php';
+		$wp_hasher = new PasswordHash( 8, true );
 	}
+	$hashed = $wp_hasher->HashPassword( $key );
+	$wpdb->update($wpdb->users, array('user_activation_key' => $hashed), array('user_login' => $user_login));
+	
 	$message = __('Someone requested that the password be reset for the following account:') . "\r\n\r\n";
 	$message .= network_home_url( '/' ) . "\r\n\r\n";
 	$message .= sprintf(__('Username: %s'), $user_login) . "\r\n\r\n";
@@ -348,14 +351,13 @@ $http_post = ('POST' == $_SERVER['REQUEST_METHOD']);
 switch ($action) {
 
 case 'postpass' :
-	if ( empty( $wp_hasher ) ) {
-		require_once( ABSPATH . 'wp-includes/class-phpass.php' );
-		// By default, use the portable hash from phpass
-		$wp_hasher = new PasswordHash(8, true);
-	}
+	require_once( ABSPATH . 'wp-includes/class-phpass.php' );
+	// By default, use the portable hash from phpass
+	$wp_hasher = new PasswordHash(8, true);
 
-	// 10 days
-	setcookie( 'wp-postpass_' . COOKIEHASH, $wp_hasher->HashPassword( stripslashes( $_POST['post_password'] ) ), time() + 10 * DAY_IN_SECONDS, COOKIEPATH );
+	// 10 days by default
+	$expire = apply_filters( 'post_password_expires', time() + 10 * DAY_IN_SECONDS );
+	setcookie( 'wp-postpass_' . COOKIEHASH, $hasher->HashPassword( wp_unslash( $_POST['post_password'] ) ), $expire, COOKIEPATH ); 
 
 	wp_safe_redirect( wp_get_referer() );
 	exit();
@@ -402,13 +404,20 @@ case 'retrievepassword' :
 		}
 	}
 
-	if ( isset($_GET['error']) && 'invalidkey' == $_GET['error'] ) $errors->add('invalidkey', __('Sorry, that key does not appear to be valid.'));
-	$redirect_to = apply_filters( 'lostpassword_redirect', !empty( $_REQUEST['redirect_to'] ) ? $_REQUEST['redirect_to'] : '' );
+	if ( isset($_GET['error'])) {
+		if ( 'invalidkey' == $_GET['error'] )
+			$errors->add( 'invalidkey', __('Sorry, that key does not appear to be valid.'));
+		elseif ( 'expiredkey' == $_GET['error'] )
+			$errors->add( 'expiredkey', __( 'Sorry, that key has expired. Please try again.' ) );
+	}
 
+	$lostpassword_redirect = ! empty( $_REQUEST['redirect_to'] ) ? $_REQUEST['redirect_to'] : '';
+	$redirect_to = apply_filters( 'lostpassword_redirect', $lostpassword_redirect );
+	
 	do_action('lost_password');
 	login_header(__('Lost Password'), '<p class="message">' . __('Please enter your username or email address. You will receive a link to create a new password via email.') . '</p>', $errors);
 
-	$user_login = isset($_POST['user_login']) ? stripslashes($_POST['user_login']) : '';
+	$user_login = isset($_POST['user_login']) ? wp_unslash($_POST['user_login']) : '';
 
 	if ($ajax) {
             exit();
@@ -444,12 +453,19 @@ case 'rp' :
 	$errors = new WP_Error();
 
 	if ( is_wp_error($user) ) {
+
 		if ($ajax) {
 			$action = 'lostpassword';
-			$errors->add('invalidkey', __('Sorry, that key does not appear to be valid.'));
+			if ( $user->get_error_code() === 'expired_key' )
+				$errors->add('expiredkey', __('Sorry, that key has expired. Please try again.'));
+			else
+				$errors->add('invalidkey', __('Sorry, that key does not appear to be valid.'));
 			login_header(__('Lost Password'), '<p class="message">' . __('Please enter your username or email address. You will receive a link to create a new password via email.') . '</p>', $errors);
 		} else {
-			wp_redirect( site_url(get_self_url(array('action' => 'lostpassword', 'error' => 'invalidkey'))) );
+			if ( $user->get_error_code() === 'expired_key' )
+				wp_redirect( site_url(get_self_url(array('action' => 'lostpassword', 'error' => 'expiredkey'))) );
+			else
+				wp_redirect( site_url(get_self_url(array('action' => 'lostpassword', 'error' => 'invalidkey'))) );
 		}
 		exit;
 	}
@@ -567,11 +583,11 @@ case 'register' :
 <form name="registerform" id="registerform" action="<?php echo esc_url( site_url('wp-login.php?action=register', 'login_post') ); ?>" method="post">
 	<p>
 		<label for="user_login"><?php _e('Username') ?><br />
-		<input type="text" name="user_login" id="user_login" class="input" value="<?php echo esc_attr(stripslashes($user_login)); ?>" size="20" /></label>
+		<input type="text" name="user_login" id="user_login" class="input" value="<?php echo esc_attr(wp_unslash($user_login)); ?>" size="20" /></label>
 	</p>
 	<p>
 		<label for="user_email"><?php _e('E-mail') ?><br />
-		<input type="text" name="user_email" id="user_email" class="input" value="<?php echo esc_attr(stripslashes($user_email)); ?>" size="25" /></label>
+		<input type="text" name="user_email" id="user_email" class="input" value="<?php echo esc_attr(wp_unslash($user_email)); ?>" size="25" /></label>
 	</p>
 <?php do_action('register_form'); ?>
 	<p id="reg_passmail"><?php _e('A password will be e-mailed to you.') ?></p>
@@ -626,7 +642,11 @@ default:
 	if ( !$secure_cookie && is_ssl() && force_ssl_login() && !force_ssl_admin() && ( 0 !== strpos($redirect_to, 'https') ) && ( 0 === strpos($redirect_to, 'http') ) )
 		$secure_cookie = false;
 
-	$user = wp_signon('', $secure_cookie);
+	// If cookies are disabled we can't log in even with a valid user+pass
+	if ( isset($_POST['testcookie']) && empty($_COOKIE[TEST_COOKIE]) )
+		$user = new WP_Error('test_cookie', __("<strong>ERROR</strong>: Cookies are blocked or not supported by your browser. You must <a href='http://www.google.com/cookies.html'>enable cookies</a> to use WordPress."));
+	else
+		$user = wp_signon('', $secure_cookie);
 
 	$redirect_to = apply_filters('login_redirect', $redirect_to, isset( $_REQUEST['redirect_to'] ) ? $_REQUEST['redirect_to'] : '', $user);
 
@@ -671,26 +691,28 @@ default:
 	if ( !empty($_GET['loggedout']) || $reauth )
 		$errors = new WP_Error();
 
-	// If cookies are disabled we can't log in even with a valid user+pass
-	if ( isset($_POST['testcookie']) && empty($_COOKIE[TEST_COOKIE]) )
-		$errors->add('test_cookie', __("<strong>ERROR</strong>: Cookies are blocked or not supported by your browser. You must <a href='http://www.google.com/cookies.html'>enable cookies</a> to use WordPress."));
+	if ( $interim_login ) {
+		if ( ! $errors->get_error_code() )
+			$errors->add('expired', __('Session expired. Please log in again. You will not move away from this page.'), 'message');
+	} else {
+		// Some parts of this script use the main login form to display a message
+		if		( isset($_GET['loggedout']) && true == $_GET['loggedout'] )
+			$errors->add('loggedout', __('You are now logged out.'), 'message');
+		elseif	( isset($_GET['registration']) && 'disabled' == $_GET['registration'] )
+			$errors->add('registerdisabled', __('User registration is currently not allowed.'));
+		elseif	( isset($_GET['checkemail']) && 'confirm' == $_GET['checkemail'] )
+			$errors->add('confirm', __('Check your e-mail for the confirmation link.'), 'message');
+		elseif	( isset($_GET['checkemail']) && 'newpass' == $_GET['checkemail'] )
+			$errors->add('newpass', __('Check your e-mail for your new password.'), 'message');
+		elseif	( isset($_GET['checkemail']) && 'registered' == $_GET['checkemail'] )
+			$errors->add('registered', __('Registration complete. Please check your e-mail.'), 'message');
+		elseif ( strpos( $redirect_to, 'about.php?updated' ) )
+			$errors->add('updated', __( '<strong>You have successfully updated WordPress!</strong> Please log back in to experience the awesomeness.' ), 'message' );
+	}
 
-	// Some parts of this script use the main login form to display a message
-	if		( isset($_GET['loggedout']) && true == $_GET['loggedout'] )
-		$errors->add('loggedout', __('You are now logged out.'), 'message');
-	elseif	( isset($_GET['registration']) && 'disabled' == $_GET['registration'] )
-		$errors->add('registerdisabled', __('User registration is currently not allowed.'));
-	elseif	( isset($_GET['checkemail']) && 'confirm' == $_GET['checkemail'] )
-		$errors->add('confirm', __('Check your e-mail for the confirmation link.'), 'message');
-	elseif	( isset($_GET['checkemail']) && 'newpass' == $_GET['checkemail'] )
-		$errors->add('newpass', __('Check your e-mail for your new password.'), 'message');
-	elseif	( isset($_GET['checkemail']) && 'registered' == $_GET['checkemail'] )
-		$errors->add('registered', __('Registration complete. Please check your e-mail.'), 'message');
-	elseif	( $interim_login )
-		$errors->add('expired', __('Your session has expired. Please log-in again.'), 'message');
-	elseif ( strpos( $redirect_to, 'about.php?updated' ) )
-		$errors->add('updated', __( '<strong>You have successfully updated WordPress!</strong> Please log back in to experience the awesomeness.' ), 'message' );
-
+	$errors = apply_filters( 'wp_login_errors', $errors, $redirect_to );
+	
+	
 	// Clear any stale cookies.
 	if ( $reauth )
 		wp_clear_auth_cookie();
@@ -702,7 +724,7 @@ default:
 	}
 
 	if ( isset($_POST['log']) )
-		$user_login = ( 'incorrect_password' == $errors->get_error_code() || 'empty_password' == $errors->get_error_code() ) ? esc_attr(stripslashes($_POST['log'])) : '';
+		$user_login = ( 'incorrect_password' == $errors->get_error_code() || 'empty_password' == $errors->get_error_code() ) ? esc_attr(wp_unslash($_POST['log'])) : '';
 	$rememberme = ! empty( $_POST['rememberme'] );
 ?><noscript>
 
@@ -731,14 +753,16 @@ default:
 	</p>
 </form>
 
-<?php if ( !$interim_login ) { ?>
+<?php if ( ! $interim_login ) { ?>
 <p id="nav">
-<?php if ( isset($_GET['checkemail']) && in_array( $_GET['checkemail'], array('confirm', 'newpass') ) ) : ?>
-<?php elseif ( get_option('users_can_register') ) : ?>
-<a href="<?php echo esc_url( site_url( 'wp-login.php?action=register', 'login' ) ); ?>"><?php _e( 'Register' ); ?></a> |
-<a href="<?php echo esc_url( wp_lostpassword_url() ); ?>" title="<?php esc_attr_e( 'Password Lost and Found' ); ?>"><?php _e( 'Lost your password?' ); ?></a>
-<?php else : ?>
-<a href="<?php echo esc_url( wp_lostpassword_url() ); ?>" title="<?php esc_attr_e( 'Password Lost and Found' ); ?>"><?php _e( 'Lost your password?' ); ?></a>
+<?php if ( ! isset( $_GET['checkemail'] ) || ! in_array( $_GET['checkemail'], array( 'confirm', 'newpass' ) ) ) :
+	if ( get_option( 'users_can_register' ) ) :
+		$registration_url = sprintf( '<a href="%s">%s</a>', esc_url( wp_registration_url() ), __( 'Register' ) );
+		/** This filter is documented in wp-login.php */
+		echo apply_filters( 'register', $registration_url ) . ' | ';
+	endif;
+	?>
+	<a href="<?php echo esc_url( wp_lostpassword_url() ); ?>" title="<?php esc_attr_e( 'Password Lost and Found' ); ?>"><?php _e( 'Lost your password?' ); ?></a>
 <?php endif; ?>
 </p>
 <?php } ?></noscript>
