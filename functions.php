@@ -13,6 +13,16 @@ function haxor_theme_setup() {
 function haxor_admin_bar_callback() { ?>
     <link rel="stylesheet" id="haxor_admin_bar"  href="<?php echo get_bloginfo( 'stylesheet_directory' ) . '/admin-bar.css'; ?>" type="text/css" media="all" />
 <?php
+	$version = get_bloginfo('version');
+	$matches = array();
+	if (preg_match('/^[0-9]+\\.[0-9]+/', $version, $matches)) {
+		if (version_compare($matches[0], '3.8') < 0) { // version before Wordpress 3.8
+			?>
+			<link rel="stylesheet" id="haxor_admin_bar_37"  href="<?php echo get_bloginfo( 'stylesheet_directory' ) . '/admin-bar.37.css'; ?>" type="text/css" media="all" />
+			<?php
+		}
+		
+	}
 }
 
 function haxor_register_main_menu() {
