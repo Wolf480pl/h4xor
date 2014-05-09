@@ -31,6 +31,11 @@
    color:#0f0;
 }
 
+#wpadminbar>#wp-toolbar li:hover span.ab-label,
+#wpadminbar>#wp-toolbar a:focus span.ab-label {
+	color: #0f0;
+}
+
 #wpadminbar.nojs .ab-top-menu>li.menupop:hover>.ab-item,#wpadminbar .ab-top-menu>li.menupop.hover>.ab-item {
    background:rgba(0,0,0,0.5);
    color:#0f0;
@@ -70,12 +75,21 @@
    color: #00C000;
 }
 
+#wpadminbar > #wp-toolbar > #wp-admin-bar-top-secondary > #wp-admin-bar-search #adminbarsearch input.adminbar-input,
+#wpadminbar #adminbarsearch .adminbar-input:focus {
+   font-family: courier;
+   color: #0f0;
+   text-shadow: none;
+   height: inherit;
+}
+
 #wpadminbar > #wp-toolbar > #wp-admin-bar-top-secondary > #wp-admin-bar-search #adminbarsearch input.adminbar-input:focus,
 #wpadminbar #adminbarsearch .adminbar-input:focus {
    background-color:rgba(0,0,0,1);
    font-family: courier;
    color: #0f0;
    text-shadow: none;
+   height: inherit;
 }
 
 #wpadminbar .hover .ab-label,#wpadminbar.nojq .ab-item:focus .ab-label, #wpadminbar .quicklinks a:hover span#ab-updates, #wpadminbar .menupop.hover .ab-label,#wpadminbar .ab-submenu .ab-item {
