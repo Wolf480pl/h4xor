@@ -21,11 +21,10 @@
 #wpadminbar .menupop .ab-sub-wrapper,#wpadminbar .shortlink-input {
    background:rgba(0,0,0,0.5);
    border-color:#0f0;
+   border-width: 0px 1px 1px;
+   border-style: solid;
 }
 
-#wpadminbar .ab-submenu {
-   border-top:1px solid #0f0;
-}
 
 #wpadminbar .ab-top-menu>li:hover>.ab-item,#wpadminbar .ab-top-menu>li.hover>.ab-item,#wpadminbar .ab-top-menu>li>.ab-item:focus,#wpadminbar.nojq .quicklinks .ab-top-menu>li>.ab-item:focus {
    background: rgba(0,0,0,0.5);
@@ -47,6 +46,7 @@
 
 #wpadminbar .quicklinks .menupop ul.ab-sub-secondary {
    background: none;
+   border-top: 1px solid #0f0;
 }
 
 #wpadminbar .quicklinks .menupop .ab-sub-secondary>li:hover,#wpadminbar .quicklinks .menupop .ab-sub-secondary>li.hover,#wpadminbar .quicklinks .menupop .ab-sub-secondary>li .ab-item:focus {
@@ -70,10 +70,12 @@
    color: #00C000;
 }
 
+#wpadminbar > #wp-toolbar > #wp-admin-bar-top-secondary > #wp-admin-bar-search #adminbarsearch input.adminbar-input:focus,
 #wpadminbar #adminbarsearch .adminbar-input:focus {
    background-color:rgba(0,0,0,1);
    font-family: courier;
    color: #0f0;
+   text-shadow: none;
 }
 
 #wpadminbar .hover .ab-label,#wpadminbar.nojq .ab-item:focus .ab-label, #wpadminbar .quicklinks a:hover span#ab-updates, #wpadminbar .menupop.hover .ab-label,#wpadminbar .ab-submenu .ab-item {
@@ -85,7 +87,8 @@
 }
 
 #wpadminbar .menupop .menupop>.ab-item, #wpadminbar .ab-top-secondary .menupop .menupop>.ab-item, #wpadminbar #adminbarsearch .adminbar-input, #wp-admin-bar-wp-logo>.ab-item .ab-icon, #wp-admin-bar-updates>.ab-item .ab-icon, #wp-admin-bar-comments>.ab-item .ab-icon, #wpadminbar #wp-admin-bar-new-content>.ab-item .ab-icon {
-   background-image:url(images/admin-bar-sprite-green.png?d=20120830);
+/* needed for versions before 3.8 */
+/*   background-image:url(images/admin-bar-sprite-green.png?d=20120830);*/
 }
 
 #wpadminbar .quicklinks .menupop ul li a:hover,
