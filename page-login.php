@@ -44,10 +44,13 @@ if ( force_ssl_admin() && ! is_ssl() ) {
  * @param WP_Error $wp_error Optional. WordPress Error Object
  */
 function login_header($title = 'Log In', $message = '', $wp_error = '', $extra_ajax_result = '') {
-	global $error, $interim_login, $current_site, $action, $ajax;
+	global $error, $interim_login, $action, $ajax;
 
 	// Don't index any of these forms
 	add_action( 'login_head', 'wp_no_robots' );
+
+	if ( wp_is_mobile() )
+		add_action( 'login_head', 'wp_login_viewport_meta' );
 
 	if ( empty($wp_error) )
 		$wp_error = new WP_Error();
@@ -61,15 +64,25 @@ function login_header($title = 'Log In', $message = '', $wp_error = '', $extra_a
 		$output = array();
 	} else {
 		?><!DOCTYPE html>
-		<html xmlns="http://www.w3.org/1999/xhtml" <?php language_attributes(); ?>>
+		<!--[if IE 8]>
+			<html xmlns="http://www.w3.org/1999/xhtml" class="ie8" <?php language_attributes(); ?>>
+		<![endif]-->
+		<!--[if !(IE 8) ]><!-->
+			<html xmlns="http://www.w3.org/1999/xhtml" <?php language_attributes(); ?>>
+		<!--<![endif]-->
 		<head>
 		<meta http-equiv="Content-Type" content="<?php bloginfo('html_type'); ?>; charset=<?php bloginfo('charset'); ?>" />
 		<title><?php bloginfo('name'); ?> &rsaquo; <?php echo $title; ?></title>
 		<?php
 
-		if ( wp_is_mobile() ) { ?>
-			<meta name="viewport" content="width=320; initial-scale=0.9; maximum-scale=1.0; user-scalable=0;" /><?php
-		 }
+		// Remove all stored post data on logging out.
+		// This could be added by add_action('login_head'...) like wp_shake_js()
+		// but maybe better if it's not removable by plugins
+		if ( 'loggedout' == $wp_error->get_error_code() ) {
+			?>
+			<script>if("sessionStorage" in window){try{for(var key in sessionStorage){if(key.indexOf("wp-autosave-")!=-1){sessionStorage.removeItem(key)}}}catch(e){}};</script>
+			<?php
+		}
 
 		do_action( 'login_enqueue_scripts' );
 		do_action( 'login_head' );
@@ -79,6 +92,7 @@ function login_header($title = 'Log In', $message = '', $wp_error = '', $extra_a
 			$classes[] = 'mobile';
 		if ( is_rtl() )
 			$classes[] = 'rtl';
+		$classes[] =' locale-' . sanitize_html_class( strtolower( str_replace( '_', '-', get_locale() ) ) );
 		$classes = apply_filters( 'login_body_class', $classes, $action );
 		?>
 		<link rel="stylesheet" id="haxor_login"  href="<?php echo get_stylesheet_directory_uri() . '/console-login.css'; ?>" type="text/css" media="all" />
@@ -163,9 +177,6 @@ function login_footer($input_id = '', $extra_vars = '') {
 	}
 
 	$login_prefix = get_option("haxor_login_prefix", get_bloginfo('name') . ' ');
-//	if (false === $login_prefix) {
-//		$login_prefix = get_bloginfo('name') . ' ';
-//	}
 	?>
 
 	</div>
@@ -203,7 +214,7 @@ function wp_shake_js() {
  * @return bool|WP_Error True: when finish. WP_Error on error
  */
 function retrieve_password() {
-	global $wpdb, $current_site;
+	global $wpdb, $wp_hasher;
 
 	$errors = new WP_Error();
 
@@ -245,7 +256,7 @@ function retrieve_password() {
 	// Generate something random for a key...
 	$key = wp_generate_password(20, false);
 	do_action('retrieve_password_key', $user_login, $key);
-	// Now insert the new md5 key into the db
+	// Now insert the key, hashed, into the DB.
 	if ( empty( $wp_hasher ) ) {
 		require_once ABSPATH . 'wp-includes/class-phpass.php';
 		$wp_hasher = new PasswordHash( 8, true );
@@ -272,7 +283,7 @@ function retrieve_password() {
 	$title = apply_filters('retrieve_password_title', $title);
 	$message = apply_filters('retrieve_password_message', $message, $key);
 
-	if ( $message && !wp_mail($user_email, $title, $message) )
+	if ( $message && !wp_mail($user_email, wp_specialchars_decode($title), $message) )
 		wp_die( __('The e-mail could not be sent.') . "<br />\n" . __('Possible reason: your host may have disabled the mail() function...') );
 
 	return true;
@@ -351,9 +362,8 @@ $http_post = ('POST' == $_SERVER['REQUEST_METHOD']);
 switch ($action) {
 
 case 'postpass' :
-	require_once( ABSPATH . 'wp-includes/class-phpass.php' );
-	// By default, use the portable hash from phpass
-	$wp_hasher = new PasswordHash(8, true);
+	require_once ABSPATH . 'wp-includes/class-phpass.php';
+	$hasher = new PasswordHash(8, true);
 
 	// 10 days by default
 	$expire = apply_filters( 'post_password_expires', time() + 10 * DAY_IN_SECONDS );
@@ -391,7 +401,7 @@ case 'retrievepassword' :
 	if ( $http_post ) {
 		$errors = retrieve_password();
 		if ( !is_wp_error($errors) ) {
-			$redirect_to = !empty( $_REQUEST['redirect_to'] ) ? $_REQUEST['redirect_to'] : basename(__FILE__) . '?checkemail=confirm';
+			$redirect_to = !empty( $_REQUEST['redirect_to'] ) ? $_REQUEST['redirect_to'] : basename(__FILE__) . '?checkemail=confirm'; //TODO: WHAT THE HELL IS __FILE__ DOING HERE?! FIX THIS!!!
 			if ($ajax) {
 				$errors = new WP_Error();
 				$errors->add('confirm', __('Check your e-mail for the confirmation link.'), 'message');
@@ -436,9 +446,19 @@ case 'retrievepassword' :
 
 <p id="nav">
 <a href="<?php echo esc_url( wp_login_url() ); ?>"><?php _e('Log in') ?></a>
-<?php if ( get_option( 'users_can_register' ) ) : ?>
- | <a href="<?php echo esc_url( site_url( 'wp-login.php?action=register', 'login' ) ); ?>"><?php _e( 'Register' ); ?></a>
-<?php endif; ?>
+<?php
+if ( get_option( 'users_can_register' ) ) :
+	$registration_url = sprintf( '<a href="%s">%s</a>', esc_url( wp_registration_url() ), __( 'Register' ) );
+	/**
+	 * Filter the registration URL below the login form.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @param string $registration_url Registration URL.
+	 */
+	echo ' | ' . apply_filters( 'register', $registration_url );
+endif;
+?>
 </p>
 </noscript>
 
@@ -495,7 +515,7 @@ case 'rp' :
 	}
 ?>
 <noscript>
-<form name="resetpassform" id="resetpassform" action="<?php echo esc_url( site_url( 'wp-login.php?action=resetpass&key=' . urlencode( $_GET['key'] ) . '&login=' . urlencode( $_GET['login'] ), 'login_post' ) ); ?>" method="post">
+<form name="resetpassform" id="resetpassform" action="<?php echo esc_url( site_url( 'wp-login.php?action=resetpass&key=' . urlencode( $_GET['key'] ) . '&login=' . urlencode( $_GET['login'] ), 'login_post' ) ); ?>" method="post" autocomplete="off">
 	<input type="hidden" id="user_login" value="<?php echo esc_attr( $_GET['login'] ); ?>" autocomplete="off" />
 
 	<p>
@@ -508,7 +528,7 @@ case 'rp' :
 	</p>
 
 	<div id="pass-strength-result" class="hide-if-no-js"><?php _e('Strength indicator'); ?></div>
-	<p class="description indicator-hint"><?php _e('Hint: The password should be at least seven characters long. To make it stronger, use upper and lower case letters, numbers and symbols like ! " ? $ % ^ &amp; ).'); ?></p>
+	<p class="description indicator-hint"><?php _e('Hint: The password should be at least seven characters long. To make it stronger, use upper and lower case letters, numbers, and symbols like ! " ? $ % ^ &amp; ).'); ?></p>
 
 	<br class="clear" />
 	<p class="submit"><input type="submit" name="wp-submit" id="wp-submit" class="button button-primary button-large" value="<?php esc_attr_e('Reset Password'); ?>" /></p>
@@ -516,9 +536,13 @@ case 'rp' :
 
 <p id="nav">
 <a href="<?php echo esc_url( wp_login_url() ); ?>"><?php _e( 'Log in' ); ?></a>
-<?php if ( get_option( 'users_can_register' ) ) : ?>
- | <a href="<?php echo esc_url( site_url( 'wp-login.php?action=register', 'login' ) ); ?>"><?php _e( 'Register' ); ?></a>
-<?php endif; ?>
+<?php
+if ( get_option( 'users_can_register' ) ) :
+	$registration_url = sprintf( '<a href="%s">%s</a>', esc_url( wp_registration_url() ), __( 'Register' ) );
+	/** This filter is documented in wp-login.php */
+	echo ' | ' . apply_filters( 'register', $registration_url );
+endif;
+?>
 </p>
 </noscript>
 
@@ -609,7 +633,6 @@ break;
 case 'login' :
 default:
 	$secure_cookie = '';
-	$interim_login = isset($_REQUEST['interim-login']);
 	$customize_login = isset( $_REQUEST['customize-login'] );
 	if ( $customize_login )
 		wp_enqueue_script( 'customize-base' );
@@ -642,24 +665,26 @@ default:
 	if ( !$secure_cookie && is_ssl() && force_ssl_login() && !force_ssl_admin() && ( 0 !== strpos($redirect_to, 'https') ) && ( 0 === strpos($redirect_to, 'http') ) )
 		$secure_cookie = false;
 
-	// If cookies are disabled we can't log in even with a valid user+pass
-	if ( isset($_POST['testcookie']) && empty($_COOKIE[TEST_COOKIE]) )
-		$user = new WP_Error('test_cookie', __("<strong>ERROR</strong>: Cookies are blocked or not supported by your browser. You must <a href='http://www.google.com/cookies.html'>enable cookies</a> to use WordPress."));
-	else
-		$user = wp_signon('', $secure_cookie);
+	$user = wp_signon( '', $secure_cookie );
+
+	if ( empty( $_COOKIE[ LOGGED_IN_COOKIE ] ) ) {
+		if ( headers_sent() ) {
+			$user = new WP_Error( 'test_cookie', sprintf( __( '<strong>ERROR</strong>: Cookies are blocked due to unexpected output. For help, please see <a href="%1$s">this documentation</a> or try the <a href="%2$s">support forums</a>.' ),
+				__( 'http://codex.wordpress.org/Cookies' ), __( 'https://wordpress.org/support/' ) ) );
+		} elseif ( isset( $_POST['testcookie'] ) && empty( $_COOKIE[ TEST_COOKIE ] ) ) {
+			// If cookies are disabled we can't log in even with a valid user+pass
+			$user = new WP_Error( 'test_cookie', sprintf( __( '<strong>ERROR</strong>: Cookies are blocked or not supported by your browser. You must <a href="%s">enable cookies</a> to use WordPress.' ),
+				__( 'http://codex.wordpress.org/Cookies' ) ) );
+		}
+	}
 
 	$redirect_to = apply_filters('login_redirect', $redirect_to, isset( $_REQUEST['redirect_to'] ) ? $_REQUEST['redirect_to'] : '', $user);
 
 	if ( !is_wp_error($user) && !$reauth ) {
 		if ( $interim_login ) {
 			$message = '<p class="message">' . __('You have logged in successfully.') . '</p>';
+			$interim_login = 'success';
 			login_header( '', $message ); ?>
-
-			<?php if ( ! $customize_login ) : ?>
-			<script type="text/javascript">setTimeout( function(){window.close()}, 8000);</script>
-			<p class="alignright">
-			<input type="button" class="button-primary" value="<?php esc_attr_e('Close'); ?>" onclick="window.close()" /></p>
-			<?php endif; ?>
 			</div>
 			<?php do_action( 'login_footer' ); ?>
 			<?php if ( $customize_login ) : ?>
